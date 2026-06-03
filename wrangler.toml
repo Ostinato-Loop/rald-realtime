@@ -1,0 +1,51 @@
+name = "rald-realtime"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = []
+
+[vars]
+ENVIRONMENT = "production"
+RALD_AUTH_URL = "https://auth.rald.cloud"
+
+# Secrets — set via: wrangler secret put <NAME>
+# Required:
+#   RALD_JWT_SECRET           — shared RALD ecosystem JWT signing secret
+#   CALLS_APP_ID              — Cloudflare Calls App ID (Dashboard > Calls)
+#   CALLS_APP_SECRET          — Cloudflare Calls App Secret
+#   LIVEKIT_URL               — LiveKit server URL (wss://your-livekit-server)
+#   LIVEKIT_API_KEY           — LiveKit API Key
+#   LIVEKIT_API_SECRET        — LiveKit API Secret
+#   TENCENT_SDK_APP_ID        — Tencent TRTC SDK App ID
+#   TENCENT_SECRET_KEY        — Tencent TRTC Secret Key
+#   SUPABASE_URL              — Supabase project URL
+#   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key
+
+[[routes]]
+pattern = "realtime.rald.cloud/*"
+zone_name = "rald.cloud"
+
+# ── KV Namespaces ─────────────────────────────────────────────────────────────
+# Create with:
+#   wrangler kv namespace create rald-realtime-rate-limit
+#   wrangler kv namespace create rald-realtime-health
+#   wrangler kv namespace create rald-realtime-state
+# Then update the ids below.
+
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_RATE_LIMIT_KV_ID"
+
+[[kv_namespaces]]
+binding = "HEALTH_KV"
+id = "REPLACE_WITH_HEALTH_KV_ID"
+
+[[kv_namespaces]]
+binding = "PROVIDER_STATE_KV"
+id = "REPLACE_WITH_PROVIDER_STATE_KV_ID"
+
+[build]
+command = ""
+
+[observability]
+enabled = true
+head_sampling_rate = 1
