@@ -19,12 +19,15 @@ jobs:
       deployments: write
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+
       - name: Install dependencies
         run: npm install
+
       - name: Resolve KV namespace IDs via Cloudflare API
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -47,52 +50,81 @@ jobs:
             console.log(`  [created]  ${title}`); return d.result.id;
           }
           (async () => {
-            const RATE_LIMIT_KV  = await resolveId('rald-realtime-rate-limit');
-            const HEALTH_KV      = await resolveId('rald-realtime-health');
+            const RATE_LIMIT_KV = await resolveId('rald-realtime-rate-limit');
+            const HEALTH_KV = await resolveId('rald-realtime-health');
             const PROVIDER_STATE_KV = await resolveId('rald-realtime-state');
             let toml = fs.readFileSync('wrangler.toml', 'utf8');
-            toml = toml.replace('REPLACE_WITH_RATE_LIMIT_KV_ID', RATE_LIMIT_KV);
-            toml = toml.replace('REPLACE_WITH_HEALTH_KV_ID', HEALTH_KV);
-            toml = toml.replace('REPLACE_WITH_PROVIDER_STATE_KV_ID', PROVIDER_STATE_KV);
+            toml = toml.replace('REPLACE_WITH_RATE_LIMIT_KV_KV_ID', RATE_LIMIT_KV);
+            toml = toml.replace('REPLACE_WITH_HEALTH_KV_KV_ID', HEALTH_KV);
+            toml = toml.replace('REPLACE_WITH_PROVIDER_STATE_KV_KV_ID', PROVIDER_STATE_KV);
             fs.writeFileSync('wrangler.toml', toml);
-            console.log('wrangler.toml patched with all 3 KV IDs.');
+            console.log('wrangler.toml patched with real KV IDs.');
           })().catch(e => { console.error(e); process.exit(1); });
           JSEOF
+
       - name: Deploy rald-realtime Worker
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Push RALD_JWT_SECRET
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          RALD_JWT_SECRET: ${{ secrets.RALD_JWT_SECRET }}
-        run: |
-          if [ -z "$RALD_JWT_SECRET" ]; then echo "FATAL: RALD_JWT_SECRET not set" && exit 1; fi
-          echo "$RALD_JWT_SECRET" | npx wrangler secret put RALD_JWT_SECRET --name rald-realtime && echo "pushed"
-      - name: Push SUPABASE_SERVICE_ROLE_KEY
+
+      - name: Push SUPABASE_SERVICE_ROLE_KEY to worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then echo "FATAL: SUPABASE_SERVICE_ROLE_KEY not set" && exit 1; fi
-          echo "$SUPABASE_SERVICE_ROLE_KEY" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name rald-realtime && echo "pushed"
-      - name: Push optional provider secrets
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "FATAL: SUPABASE_SERVICE_ROLE_KEY not set" && exit 1
+          fi
+          echo "$SUPABASE_SERVICE_ROLE_KEY" | npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name rald-realtime
+          echo "SUPABASE_SERVICE_ROLE_KEY pushed to rald-realtime"
+
+      - name: Push RALD_JWT_SECRET to worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RALD_JWT_SECRET: ${{ secrets.RALD_JWT_SECRET }}
+        run: |
+          if [ -z "$RALD_JWT_SECRET" ]; then
+            echo "WARNING: RALD_JWT_SECRET not set in GitHub secrets — add it as an org-level secret to complete setup"
+          else
+            echo "$RALD_JWT_SECRET" | npx wrangler secret put RALD_JWT_SECRET --name rald-realtime
+            echo "RALD_JWT_SECRET pushed to rald-realtime"
+          fi
+      - name: Push TENCENT_SDK_APP_ID to worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TENCENT_SDK_APP_ID: ${{ secrets.TENCENT_SDK_APP_ID }}
+        run: |
+          if [ -z "$TENCENT_SDK_APP_ID" ]; then
+            echo "WARNING: TENCENT_SDK_APP_ID not set in GitHub secrets — add it as an org-level secret to complete setup"
+          else
+            echo "$TENCENT_SDK_APP_ID" | npx wrangler secret put TENCENT_SDK_APP_ID --name rald-realtime
+            echo "TENCENT_SDK_APP_ID pushed to rald-realtime"
+          fi
+      - name: Push TENCENT_SECRET_KEY to worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TENCENT_SECRET_KEY: ${{ secrets.TENCENT_SECRET_KEY }}
+        run: |
+          if [ -z "$TENCENT_SECRET_KEY" ]; then
+            echo "WARNING: TENCENT_SECRET_KEY not set in GitHub secrets — add it as an org-level secret to complete setup"
+          else
+            echo "$TENCENT_SECRET_KEY" | npx wrangler secret put TENCENT_SECRET_KEY --name rald-realtime
+            echo "TENCENT_SECRET_KEY pushed to rald-realtime"
+          fi
+      - name: Push CALLS_APP_SECRET to worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CALLS_APP_SECRET: ${{ secrets.CALLS_APP_SECRET }}
         run: |
-          if [ -n "$TENCENT_SDK_APP_ID" ]; then
-            echo "$TENCENT_SDK_APP_ID" | npx wrangler secret put TENCENT_SDK_APP_ID --name rald-realtime
-            echo "$TENCENT_SECRET_KEY" | npx wrangler secret put TENCENT_SECRET_KEY --name rald-realtime
-            echo "Tencent secrets pushed"
-          fi
-          if [ -n "$CALLS_APP_SECRET" ]; then
+          if [ -z "$CALLS_APP_SECRET" ]; then
+            echo "WARNING: CALLS_APP_SECRET not set in GitHub secrets — add it as an org-level secret to complete setup"
+          else
             echo "$CALLS_APP_SECRET" | npx wrangler secret put CALLS_APP_SECRET --name rald-realtime
-            echo "CALLS_APP_SECRET pushed"
+            echo "CALLS_APP_SECRET pushed to rald-realtime"
           fi
