@@ -9,27 +9,17 @@ RALD_AUTH_URL = "https://auth.rald.cloud"
 
 # Secrets — set via: wrangler secret put <NAME>
 # Required:
-#   RALD_JWT_SECRET           — shared RALD ecosystem JWT signing secret
-#   CALLS_APP_ID              — Cloudflare Calls App ID (Dashboard > Calls)
-#   CALLS_APP_SECRET          — Cloudflare Calls App Secret
-#   LIVEKIT_URL               — LiveKit server URL (wss://your-livekit-server)
-#   LIVEKIT_API_KEY           — LiveKit API Key
-#   LIVEKIT_API_SECRET        — LiveKit API Secret
-#   TENCENT_SDK_APP_ID        — Tencent TRTC SDK App ID
-#   TENCENT_SECRET_KEY        — Tencent TRTC Secret Key
-#   SUPABASE_URL              — Supabase project URL
-#   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key
+#   RALD_JWT_SECRET
+#   SUPABASE_URL (org secret)
+#   SUPABASE_SERVICE_ROLE_KEY (org secret)
+# Optional (provider-specific):
+#   CALLS_APP_ID, CALLS_APP_SECRET    — Cloudflare Calls
+#   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
+#   TENCENT_SDK_APP_ID, TENCENT_SECRET_KEY
 
 [[routes]]
 pattern = "realtime.rald.cloud/*"
 zone_name = "rald.cloud"
-
-# ── KV Namespaces ─────────────────────────────────────────────────────────────
-# Create with:
-#   wrangler kv namespace create rald-realtime-rate-limit
-#   wrangler kv namespace create rald-realtime-health
-#   wrangler kv namespace create rald-realtime-state
-# Then update the ids below.
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
