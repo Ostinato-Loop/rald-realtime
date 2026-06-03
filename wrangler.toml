@@ -7,16 +7,6 @@ compatibility_flags = []
 ENVIRONMENT = "production"
 RALD_AUTH_URL = "https://auth.rald.cloud"
 
-# Secrets — set via: wrangler secret put <NAME>
-# Required:
-#   RALD_JWT_SECRET
-#   SUPABASE_URL (org secret)
-#   SUPABASE_SERVICE_ROLE_KEY (org secret)
-# Optional (provider-specific):
-#   CALLS_APP_ID, CALLS_APP_SECRET    — Cloudflare Calls
-#   LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
-#   TENCENT_SDK_APP_ID, TENCENT_SECRET_KEY
-
 [[routes]]
 pattern = "realtime.rald.cloud/*"
 zone_name = "rald.cloud"
