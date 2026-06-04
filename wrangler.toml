@@ -13,15 +13,15 @@ zone_name = "rald.cloud"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "REPLACE_WITH_RATE_LIMIT_KV_ID"
+id = "5115e9d11424487eaaff71638addff34"
 
 [[kv_namespaces]]
 binding = "HEALTH_KV"
-id = "REPLACE_WITH_HEALTH_KV_ID"
+id = "36a4c73ff82a4aabae5fa4b604622047"
 
 [[kv_namespaces]]
 binding = "PROVIDER_STATE_KV"
-id = "REPLACE_WITH_PROVIDER_STATE_KV_ID"
+id = "91d1b5895a99481588118695fba6bd52"
 
 [build]
 command = ""
