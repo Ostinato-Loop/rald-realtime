@@ -1,5 +1,6 @@
 // RALD Realtime — Room Management Routes
 // GET  /rooms              — list live rooms (by product + optional region)
+// GET  /rooms/:id          — get single room by ID
 // POST /rooms              — create room
 // POST /rooms/:id/join     — join room
 // POST /rooms/:id/leave    — leave room
@@ -106,6 +107,48 @@ export function createRoomsRouter(registry: ProviderRegistry) {
     }
   });
 
+  // ── GET /rooms/:id/participants ─────────────────────────────────────────────
+  // Must be defined before GET /:id to avoid the :id wildcard swallowing "participants"
+  rooms.get("/:id/participants", async (c) => {
+    const token = extractToken(c.req.header("Authorization"));
+    if (!token) return c.json({ error: "Authorization required" }, 401);
+
+    const payload = await verifyRaldToken(token, c.env.RALD_JWT_SECRET);
+    if (!payload) return c.json({ error: "Invalid or expired token" }, 401);
+
+    const roomId = c.req.param("id");
+    const product = (c.req.query("product") ?? "loop") as ProductContext;
+
+    try {
+      const participants = await withFailover(registry, product, c.env, (p) =>
+        p.getParticipants(roomId), payload.id);
+      return c.json({ roomId, participants, count: participants.length });
+    } catch (err) {
+      return c.json({ error: "Failed to get participants", detail: String(err) }, 502);
+    }
+  });
+
+  // ── GET /rooms/:id ──────────────────────────────────────────────────────────
+  rooms.get("/:id", async (c) => {
+    const token = extractToken(c.req.header("Authorization"));
+    if (!token) return c.json({ error: "Authorization required" }, 401);
+
+    const payload = await verifyRaldToken(token, c.env.RALD_JWT_SECRET);
+    if (!payload) return c.json({ error: "Invalid or expired token" }, 401);
+
+    const roomId = c.req.param("id");
+    const product = (c.req.query("product") ?? "loop") as ProductContext;
+
+    const val = await c.env.PROVIDER_STATE_KV.get(roomKey(product, roomId));
+    if (!val) return c.json({ error: "Room not found or has ended" }, 404);
+
+    try {
+      return c.json(JSON.parse(val) as RoomRecord);
+    } catch {
+      return c.json({ error: "Room data corrupted" }, 500);
+    }
+  });
+
   // ── POST /rooms ─────────────────────────────────────────────────────────────
   rooms.post("/", async (c) => {
     const token = extractToken(c.req.header("Authorization"));
@@ -145,7 +188,7 @@ export function createRoomsRouter(registry: ProviderRegistry) {
           metadata: body.metadata,
         }), payload.id);
 
-      // Store room in registry for GET /rooms
+      // Store room in registry for GET /rooms and GET /rooms/:id
       const meta = body.metadata ?? {};
       const record: RoomRecord = {
         roomId: body.roomId,
@@ -248,7 +291,7 @@ export function createRoomsRouter(registry: ProviderRegistry) {
       await withFailover(registry, product, c.env, (p) =>
         p.leaveRoom(roomId, payload.id), payload.id);
 
-      // Decrement participant count; remove room if host left and count = 0
+      // Decrement participant count; remove room if host left or count hits zero
       const key = roomKey(product, roomId);
       const existing = await c.env.PROVIDER_STATE_KV.get(key);
       if (existing) {
@@ -275,26 +318,6 @@ export function createRoomsRouter(registry: ProviderRegistry) {
       return c.json({ ok: true });
     } catch (err) {
       return c.json({ error: "Failed to leave room", detail: String(err) }, 502);
-    }
-  });
-
-  // ── GET /rooms/:id/participants ─────────────────────────────────────────────
-  rooms.get("/:id/participants", async (c) => {
-    const token = extractToken(c.req.header("Authorization"));
-    if (!token) return c.json({ error: "Authorization required" }, 401);
-
-    const payload = await verifyRaldToken(token, c.env.RALD_JWT_SECRET);
-    if (!payload) return c.json({ error: "Invalid or expired token" }, 401);
-
-    const roomId = c.req.param("id");
-    const product = (c.req.query("product") ?? "messenger") as ProductContext;
-
-    try {
-      const participants = await withFailover(registry, product, c.env, (p) =>
-        p.getParticipants(roomId), payload.id);
-      return c.json({ roomId, participants, count: participants.length });
-    } catch (err) {
-      return c.json({ error: "Failed to get participants", detail: String(err) }, 502);
     }
   });
 
