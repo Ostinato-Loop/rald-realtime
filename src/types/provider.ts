@@ -85,6 +85,9 @@ export interface RealtimeProvider {
 }
 
 // ── Provider routing config ────────────────────────────────────────────────
+// NOTE: Loop uses livekit as P1 because the Loop client uses livekit-client
+// (WebRTC SDK). Cloudflare Calls (realtimekit) tokens are not compatible
+// with the LiveKit signaling protocol — do not swap these back.
 
 export interface ProviderPriority {
   product: ProductContext;
@@ -95,17 +98,17 @@ export interface ProviderPriority {
 export const PROVIDER_PRIORITIES: ProviderPriority[] = [
   {
     product: "loop",
-    priority: ["realtimekit", "livekit"],
+    priority: ["livekit", "realtimekit"],   // livekit MUST be P1 for loop
     degradedMode: "audio-only",
   },
   {
     product: "loop-voice",
-    priority: ["realtimekit", "livekit"],
+    priority: ["livekit", "realtimekit"],
     degradedMode: "audio-only",
   },
   {
     product: "loop-business",
-    priority: ["realtimekit", "livekit"],
+    priority: ["livekit", "realtimekit"],
     degradedMode: "audio-only",
   },
   {
