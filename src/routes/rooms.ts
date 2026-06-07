@@ -1,7 +1,8 @@
 // RALD Realtime — Room Management Routes
-// POST /rooms — create room
-// POST /rooms/:id/join — join room
-// POST /rooms/:id/leave — leave room
+// GET  /rooms              — list live rooms (by product + optional region)
+// POST /rooms              — create room
+// POST /rooms/:id/join     — join room
+// POST /rooms/:id/leave    — leave room
 // GET  /rooms/:id/participants — list participants
 // LILCKY STUDIO LIMITED
 
@@ -14,10 +15,98 @@ import { writeAuditLog } from "../lib/audit";
 import { withFailover } from "../lib/router";
 import type { ProviderRegistry } from "../lib/router";
 
+// ── Room registry helpers (PROVIDER_STATE_KV) ─────────────────────────────────
+// Key format: rooms:{product}:{roomId}
+// Value: JSON blob with room metadata + participant count
+// TTL: 24 hours (rooms auto-expire if not explicitly ended)
+
+const ROOM_TTL_SECONDS = 86_400; // 24 hours
+
+interface RoomRecord {
+  roomId: string;
+  product: string;
+  name: string;
+  description: string;
+  host: string;
+  hostId: string;
+  category: string;
+  region: string;
+  language: string;
+  participantCount: number;
+  maxParticipants: number;
+  createdAt: string;
+  provider: string;
+}
+
+function roomKey(product: string, roomId: string): string {
+  return `rooms:${product}:${roomId}`;
+}
+
+async function storeRoom(kv: Bindings["PROVIDER_STATE_KV"], record: RoomRecord): Promise<void> {
+  await kv.put(roomKey(record.product, record.roomId), JSON.stringify(record), {
+    expirationTtl: ROOM_TTL_SECONDS,
+  });
+}
+
+async function removeRoom(kv: Bindings["PROVIDER_STATE_KV"], product: string, roomId: string): Promise<void> {
+  await kv.delete(roomKey(product, roomId));
+}
+
+async function listRooms(
+  kv: Bindings["PROVIDER_STATE_KV"],
+  product: string,
+  region?: string
+): Promise<RoomRecord[]> {
+  const prefix = `rooms:${product}:`;
+  const rooms: RoomRecord[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const result = await kv.list({ prefix, limit: 100, ...(cursor ? { cursor } : {}) });
+    const fetches = result.keys.map((k) => kv.get(k.name));
+    const values = await Promise.all(fetches);
+
+    for (const val of values) {
+      if (!val) continue;
+      try {
+        const room = JSON.parse(val) as RoomRecord;
+        if (!region || region === "all" || room.region === region) {
+          rooms.push(room);
+        }
+      } catch { /* skip malformed */ }
+    }
+
+    cursor = result.list_complete ? undefined : result.cursor;
+  } while (cursor);
+
+  // Sort: newest first
+  rooms.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return rooms;
+}
+
 export function createRoomsRouter(registry: ProviderRegistry) {
   const rooms = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-  // POST /rooms
+  // ── GET /rooms ──────────────────────────────────────────────────────────────
+  rooms.get("/", async (c) => {
+    const token = extractToken(c.req.header("Authorization"));
+    if (!token) return c.json({ error: "Authorization required" }, 401);
+
+    const payload = await verifyRaldToken(token, c.env.RALD_JWT_SECRET);
+    if (!payload) return c.json({ error: "Invalid or expired token" }, 401);
+
+    const product = (c.req.query("product") ?? "loop") as ProductContext;
+    const region = c.req.query("region") ?? undefined;
+
+    try {
+      const roomList = await listRooms(c.env.PROVIDER_STATE_KV, product, region);
+      return c.json({ rooms: roomList, count: roomList.length });
+    } catch (err) {
+      return c.json({ error: "Failed to list rooms", detail: String(err) }, 502);
+    }
+  });
+
+  // ── POST /rooms ─────────────────────────────────────────────────────────────
   rooms.post("/", async (c) => {
     const token = extractToken(c.req.header("Authorization"));
     if (!token) return c.json({ error: "Authorization required" }, 401);
@@ -56,6 +145,25 @@ export function createRoomsRouter(registry: ProviderRegistry) {
           metadata: body.metadata,
         }), payload.id);
 
+      // Store room in registry for GET /rooms
+      const meta = body.metadata ?? {};
+      const record: RoomRecord = {
+        roomId: body.roomId,
+        product: body.product,
+        name: meta["name"] ?? body.roomId,
+        description: meta["description"] ?? "",
+        host: meta["host"] ?? payload.email ?? payload.id,
+        hostId: payload.id,
+        category: meta["category"] ?? "General",
+        region: meta["region"] ?? "all",
+        language: meta["language"] ?? "en",
+        participantCount: 1,
+        maxParticipants: body.maxParticipants ?? 500,
+        createdAt: new Date().toISOString(),
+        provider: result.provider,
+      };
+      await storeRoom(c.env.PROVIDER_STATE_KV, record);
+
       await writeAuditLog(c.env, {
         userId: payload.id,
         action: "room_created",
@@ -72,7 +180,7 @@ export function createRoomsRouter(registry: ProviderRegistry) {
     }
   });
 
-  // POST /rooms/:id/join
+  // ── POST /rooms/:id/join ────────────────────────────────────────────────────
   rooms.post("/:id/join", async (c) => {
     const token = extractToken(c.req.header("Authorization"));
     if (!token) return c.json({ error: "Authorization required" }, 401);
@@ -96,6 +204,17 @@ export function createRoomsRouter(registry: ProviderRegistry) {
       const result = await withFailover(registry, product, c.env, (p) =>
         p.joinRoom(roomId, payload.id, body.role ?? "listener", product), payload.id);
 
+      // Increment participant count in registry
+      const key = roomKey(product, roomId);
+      const existing = await c.env.PROVIDER_STATE_KV.get(key);
+      if (existing) {
+        try {
+          const rec = JSON.parse(existing) as RoomRecord;
+          rec.participantCount = (rec.participantCount ?? 0) + 1;
+          await storeRoom(c.env.PROVIDER_STATE_KV, rec);
+        } catch { /* non-fatal */ }
+      }
+
       await writeAuditLog(c.env, {
         userId: payload.id,
         action: "room_joined",
@@ -112,7 +231,7 @@ export function createRoomsRouter(registry: ProviderRegistry) {
     }
   });
 
-  // POST /rooms/:id/leave
+  // ── POST /rooms/:id/leave ───────────────────────────────────────────────────
   rooms.post("/:id/leave", async (c) => {
     const token = extractToken(c.req.header("Authorization"));
     if (!token) return c.json({ error: "Authorization required" }, 401);
@@ -129,6 +248,21 @@ export function createRoomsRouter(registry: ProviderRegistry) {
       await withFailover(registry, product, c.env, (p) =>
         p.leaveRoom(roomId, payload.id), payload.id);
 
+      // Decrement participant count; remove room if host left and count = 0
+      const key = roomKey(product, roomId);
+      const existing = await c.env.PROVIDER_STATE_KV.get(key);
+      if (existing) {
+        try {
+          const rec = JSON.parse(existing) as RoomRecord;
+          rec.participantCount = Math.max(0, (rec.participantCount ?? 1) - 1);
+          if (rec.participantCount === 0 || payload.id === rec.hostId) {
+            await removeRoom(c.env.PROVIDER_STATE_KV, product, roomId);
+          } else {
+            await storeRoom(c.env.PROVIDER_STATE_KV, rec);
+          }
+        } catch { /* non-fatal */ }
+      }
+
       await writeAuditLog(c.env, {
         userId: payload.id,
         action: "room_left",
@@ -144,7 +278,7 @@ export function createRoomsRouter(registry: ProviderRegistry) {
     }
   });
 
-  // GET /rooms/:id/participants
+  // ── GET /rooms/:id/participants ─────────────────────────────────────────────
   rooms.get("/:id/participants", async (c) => {
     const token = extractToken(c.req.header("Authorization"));
     if (!token) return c.json({ error: "Authorization required" }, 401);

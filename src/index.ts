@@ -19,16 +19,32 @@ import type { ProviderRegistry } from "./lib/router";
 
 const VERSION = "1.0.0";
 
+const ALLOWED_ORIGINS = new Set([
+  "https://rald.cloud",
+  "https://app.rald.cloud",
+  "https://loop.rald.cloud",
+  "https://messenger.rald.cloud",
+  "https://business.rald.cloud",
+  "https://realtime.rald.cloud",
+  "https://profiles.rald.cloud",
+  "https://sv.rald.cloud",
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:23226",
+]);
+
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  // Replit preview domains
+  if (/^https:\/\/[a-z0-9-]+\.replit\.(app|dev)$/.test(origin)) return true;
+  return false;
+}
+
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 app.use("*", cors({
-  origin: [
-    "https://rald.cloud", "https://app.rald.cloud", "https://loop.rald.cloud",
-    "https://messenger.rald.cloud", "https://business.rald.cloud",
-    "https://realtime.rald.cloud", "https://profiles.rald.cloud",
-    "https://sv.rald.cloud", "http://localhost:5173", "http://localhost:3000",
-  ],
+  origin: (origin) => (isAllowedOrigin(origin) ? origin : null),
   allowHeaders: ["Authorization", "Content-Type", "X-Product", "X-Request-ID"],
   allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
   credentials: true,
@@ -47,13 +63,11 @@ function buildRegistry(env: Bindings): ProviderRegistry {
 app.use("*", async (c, next) => {
   const registry = buildRegistry(c.env);
 
-  // Mount routers by injecting registry
-  const roomsApp  = createRoomsRouter(registry);
-  const callsApp  = createCallsRouter(registry);
-  const healthApp = createHealthRouter(registry);
+  const roomsApp     = createRoomsRouter(registry);
+  const callsApp     = createCallsRouter(registry);
+  const healthApp    = createHealthRouter(registry);
   const analyticsApp = createAnalyticsRouter();
 
-  // Delegate to correct sub-app
   const path = new URL(c.req.url).pathname;
   if (path.startsWith("/rooms"))     return roomsApp.fetch(c.req.raw, c.env, c.executionCtx);
   if (path.startsWith("/calls"))     return callsApp.fetch(c.req.raw, c.env, c.executionCtx);
@@ -88,18 +102,19 @@ app.get("/", (c) =>
     version:  VERSION,
     docs:     "https://realtime.rald.cloud/health",
     endpoints: {
-      health:     "GET  /health",
-      providers:  "GET  /health/providers",
-      status:     "GET  /status",
-      createRoom: "POST /rooms",
-      joinRoom:   "POST /rooms/:id/join",
-      leaveRoom:  "POST /rooms/:id/leave",
-      participants:"GET /rooms/:id/participants",
-      startCall:  "POST /calls/start",
-      endCall:    "POST /calls/:id/end",
-      record:     "POST /calls/:id/record",
-      analytics:  "GET  /analytics/summary  (admin)",
-      costs:      "GET  /analytics/costs    (admin)",
+      health:      "GET  /health",
+      providers:   "GET  /health/providers",
+      status:      "GET  /status",
+      listRooms:   "GET  /rooms?product=loop&region=lagos",
+      createRoom:  "POST /rooms",
+      joinRoom:    "POST /rooms/:id/join",
+      leaveRoom:   "POST /rooms/:id/leave",
+      participants:"GET  /rooms/:id/participants",
+      startCall:   "POST /calls/start",
+      endCall:     "POST /calls/:id/end",
+      record:      "POST /calls/:id/record",
+      analytics:   "GET  /analytics/summary  (admin)",
+      costs:       "GET  /analytics/costs    (admin)",
     },
     owner: "LILCKY STUDIO LIMITED",
     timestamp: new Date().toISOString(),
@@ -114,14 +129,13 @@ app.onError((err, c) => {
 
 export default {
   async fetch(req: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
-    // ── FAIL FAST — realtime requires at least one provider configured ───
     const missing: string[] = [];
     if (!env.CALLS_APP_SECRET && !env.LIVEKIT_API_SECRET && !env.TENCENT_SECRET_KEY)
-      missing.push('CALLS_APP_SECRET or LIVEKIT_API_SECRET or TENCENT_SECRET_KEY (at least one provider)');
+      missing.push("CALLS_APP_SECRET or LIVEKIT_API_SECRET or TENCENT_SECRET_KEY (at least one provider)");
     if (missing.length) {
-      console.error(`[FATAL] rald-realtime: missing required config: ${missing.join(', ')}`);
-      return new Response(JSON.stringify({ error: 'Service misconfigured', missing, service: 'rald-realtime' }), {
-        status: 503, headers: { 'Content-Type': 'application/json' },
+      console.error(`[FATAL] rald-realtime: missing required config: ${missing.join(", ")}`);
+      return new Response(JSON.stringify({ error: "Service misconfigured", missing, service: "rald-realtime" }), {
+        status: 503, headers: { "Content-Type": "application/json" },
       });
     }
     return app.fetch(req, env, ctx);

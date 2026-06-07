@@ -5,6 +5,11 @@ export interface KVNamespace {
   get(key: string): Promise<string | null>;
   put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>;
   delete(key: string): Promise<void>;
+  list(opts?: { prefix?: string; limit?: number; cursor?: string }): Promise<{
+    keys: Array<{ name: string; expiration?: number }>;
+    list_complete: boolean;
+    cursor?: string;
+  }>;
 }
 
 export type Bindings = {
