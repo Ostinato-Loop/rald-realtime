@@ -6,6 +6,7 @@
 // LILCKY STUDIO LIMITED
 
 import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
 import { createClient } from "@supabase/supabase-js";
 import type { Bindings, Variables } from "../types/env";
 import { extractToken, verifyRaldToken } from "../lib/auth";
@@ -13,8 +14,8 @@ import { extractToken, verifyRaldToken } from "../lib/auth";
 export function createAnalyticsRouter() {
   const analytics = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-  // Admin auth middleware
-  const adminOnly = async (c: { req: { header: (h: string) => string | undefined }; json: (d: unknown, s?: number) => Response; env: Bindings }, next: () => Promise<void>) => {
+  // Admin auth middleware — typed as MiddlewareHandler to satisfy Hono v4 type constraints
+  const adminOnly: MiddlewareHandler<{ Bindings: Bindings; Variables: Variables }> = async (c, next) => {
     const token = extractToken(c.req.header("Authorization"));
     if (!token) return c.json({ error: "Authorization required" }, 401);
     const payload = await verifyRaldToken(token, c.env.RALD_JWT_SECRET);
@@ -25,7 +26,7 @@ export function createAnalyticsRouter() {
   };
 
   // GET /analytics/summary
-  analytics.get("/summary", adminOnly as Parameters<typeof analytics.get>[1], async (c) => {
+  analytics.get("/summary", adminOnly, async (c) => {
     const db = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
     const since = new Date(Date.now() - 86400000).toISOString(); // last 24h
 
@@ -64,7 +65,7 @@ export function createAnalyticsRouter() {
   });
 
   // GET /analytics/costs
-  analytics.get("/costs", adminOnly as Parameters<typeof analytics.get>[1], async (c) => {
+  analytics.get("/costs", adminOnly, async (c) => {
     const db = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
     const today = new Date().toISOString().split("T")[0];
 
@@ -107,7 +108,7 @@ export function createAnalyticsRouter() {
   });
 
   // GET /analytics/providers
-  analytics.get("/providers", adminOnly as Parameters<typeof analytics.get>[1], async (c) => {
+  analytics.get("/providers", adminOnly, async (c) => {
     const db = createClient(c.env.SUPABASE_URL, c.env.SUPABASE_SERVICE_ROLE_KEY);
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
 
