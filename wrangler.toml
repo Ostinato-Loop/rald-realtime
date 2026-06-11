@@ -1,11 +1,12 @@
 name = "rald-realtime"
 main = "src/index.ts"
-compatibility_date = "2025-01-01"
+compatibility_date = "2025-06-01"
 compatibility_flags = []
 
 [vars]
 ENVIRONMENT = "production"
 RALD_AUTH_URL = "https://auth.rald.cloud"
+SUPABASE_URL = "https://onxdcikfttdmnhofsuwo.supabase.co"
 
 [[routes]]
 pattern = "realtime.rald.cloud/*"
