@@ -107,10 +107,12 @@ app.use("*", async (c, next) => {
   const analyticsApp = createAnalyticsRouter();
 
   const path = new URL(c.req.url).pathname;
-  if (path.startsWith("/rooms"))     return roomsApp.fetch(c.req.raw, c.env, c.executionCtx);
-  if (path.startsWith("/calls"))     return callsApp.fetch(c.req.raw, c.env, c.executionCtx);
-  if (path.startsWith("/health"))    return healthApp.fetch(c.req.raw, c.env, c.executionCtx);
-  if (path.startsWith("/analytics")) return analyticsApp.fetch(c.req.raw, c.env, c.executionCtx);
+  // Strip path prefix so sub-app Hono routers receive "/" not "/health" etc.
+  const rewrite = (pfx: string) => { const u = new URL(c.req.url); u.pathname = path.slice(pfx.length) || "/"; return new Request(u.toString(), c.req.raw); };
+  if (path.startsWith("/rooms"))     return roomsApp.fetch(rewrite("/rooms"), c.env, c.executionCtx);
+  if (path.startsWith("/calls"))     return callsApp.fetch(rewrite("/calls"), c.env, c.executionCtx);
+  if (path.startsWith("/health"))    return healthApp.fetch(rewrite("/health"), c.env, c.executionCtx);
+  if (path.startsWith("/analytics")) return analyticsApp.fetch(rewrite("/analytics"), c.env, c.executionCtx);
   await next();
 });
 
