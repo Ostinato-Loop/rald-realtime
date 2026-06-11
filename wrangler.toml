@@ -23,9 +23,6 @@ id = "36a4c73ff82a4aabae5fa4b604622047"
 binding = "PROVIDER_STATE_KV"
 id = "91d1b5895a99481588118695fba6bd52"
 
-[triggers]
-crons = ["*/15 * * * *"]
-
 [build]
 command = ""
 
