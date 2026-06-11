@@ -21,7 +21,7 @@ import type { ProviderRegistry } from "../lib/router";
 // Value: JSON blob with room metadata + participant count
 // TTL: 24 hours (rooms auto-expire if not explicitly ended)
 
-const ROOM_TTL_SECONDS = 86_400; // 24 hours
+const ROOM_TTL_SECONDS = 259_200; // 72 hours — rooms survive overnight (P2-7)
 
 interface RoomRecord {
   roomId: string;
