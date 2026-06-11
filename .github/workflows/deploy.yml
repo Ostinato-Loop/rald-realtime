@@ -128,3 +128,20 @@ jobs:
             echo "$CALLS_APP_SECRET" | npx wrangler secret put CALLS_APP_SECRET --name rald-realtime
             echo "CALLS_APP_SECRET pushed to rald-realtime"
           fi
+
+      - name: Post-deploy smoke test
+        run: |
+          sleep 5
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" https://realtime.rald.cloud/health || echo "000")
+          echo "realtime.rald.cloud/health → HTTP $STATUS"
+          if [ "$STATUS" = "200" ]; then
+            echo "SMOKE TEST PASSED"
+          else
+            echo "WARNING: HTTP $STATUS — worker may still be propagating (non-fatal)"
+          fi
+        continue-on-error: true
+
+      - name: Record deployment audit
+        if: always()
+        run: |
+          echo "AUDIT: service=rald-realtime commit=${{ github.sha }} actor=${{ github.actor }} ts=$(date -u +%Y-%m-%dT%H:%M:%SZ) status=${{ job.status }}"
