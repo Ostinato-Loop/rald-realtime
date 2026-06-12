@@ -129,6 +129,23 @@ jobs:
             echo "CALLS_APP_SECRET pushed to rald-realtime"
           fi
 
+
+      # ── C-CERT-004: Centralized Log Shipping (OpenObserve) ─────────────────
+      - name: Push OpenObserve secrets to worker (C-CERT-004)
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OPEN_OBSERVE_API_KEY: ${{ secrets.OPEN_OBSERVE_API_KEY }}
+          OPEN_OBSERVE_ENDPOINT_SVC: ${{ secrets.OPEN_OBSERVE_ENDPOINT_REALTIME }}
+        run: |
+          if [ -n "$OPEN_OBSERVE_API_KEY" ]; then
+            echo "$OPEN_OBSERVE_API_KEY" | npx wrangler secret put OPEN_OBSERVE_API_KEY --name rald-realtime
+            echo "$OPEN_OBSERVE_ENDPOINT_SVC" | npx wrangler secret put OPEN_OBSERVE_ENDPOINT --name rald-realtime
+            echo "OpenObserve secrets pushed to rald-realtime (C-CERT-004 resolved)"
+          else
+            echo "WARNING: OPEN_OBSERVE_API_KEY not set — add to GitHub org secrets"
+          fi
       - name: Post-deploy smoke test
         run: |
           sleep 5
